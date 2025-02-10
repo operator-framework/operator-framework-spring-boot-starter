@@ -57,7 +57,7 @@
     <maven.compiler.source>17</maven.compiler.source>
     <maven.compiler.target>17</maven.compiler.target>
     <maven.compiler.release>17</maven.compiler.release>
-    <spotless.version>2.44.1</spotless.version>
+    <spotless.version>2.44.2</spotless.version>
     <spring-boot.version>3.4.2</spring-boot.version>
     <josdk.version>5.0.1</josdk.version>
     <surefire.version>3.5.2</surefire.version>
