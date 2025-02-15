@@ -10,7 +10,7 @@ import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.ListOptionsBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.javaoperatorsdk.jenvtest.junit.EnableKubeAPIServer;
-import io.javaoperatorsdk.operator.springboot.starter.CRDApplier.CRDTransformer;
+import io.javaoperatorsdk.operator.springboot.starter.crd.CRDTransformer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,20 +42,19 @@ public class AutoConfigurationIntegrationTest {
   @TestConfiguration
   static class TestConfig {
 
+    private static HasMetadata addLabel(HasMetadata crd, String k, String v) {
+      crd.getMetadata().getLabels().put(k, v);
+      return crd;
+    }
+
     @Bean
     public CRDTransformer transformerOne() {
       return crd -> addLabel(crd, "Glory", "Glory");
     }
 
-
     @Bean
     public CRDTransformer transformerTwo() {
       return crd -> addLabel(crd, "Man", "United");
-    }
-
-    private static HasMetadata addLabel(HasMetadata crd, String k, String v) {
-      crd.getMetadata().getLabels().put(k, v);
-      return crd;
     }
 
   }

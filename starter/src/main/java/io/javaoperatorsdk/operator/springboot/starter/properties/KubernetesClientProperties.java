@@ -1,5 +1,6 @@
-package io.javaoperatorsdk.operator.springboot.starter;
+package io.javaoperatorsdk.operator.springboot.starter.properties;
 
+import java.util.Objects;
 import java.util.Optional;
 
 public class KubernetesClientProperties {
@@ -12,6 +13,7 @@ public class KubernetesClientProperties {
   private String masterUrl;
   private boolean trustSelfSignedCertificates = false;
 
+
   public boolean isOpenshift() {
     return openshift;
   }
@@ -21,12 +23,23 @@ public class KubernetesClientProperties {
     return this;
   }
 
+  public boolean isTrustSelfSignedCertificates() {
+    return trustSelfSignedCertificates;
+  }
+
+  public KubernetesClientProperties setTrustSelfSignedCertificates(
+      boolean trustSelfSignedCertificates) {
+    this.trustSelfSignedCertificates = trustSelfSignedCertificates;
+    return this;
+  }
+
   public Optional<String> getContext() {
     return Optional.ofNullable(context);
   }
 
-  public void setContext(String context) {
+  public KubernetesClientProperties setContext(String context) {
     this.context = context;
+    return this;
   }
 
   public Optional<String> getUsername() {
@@ -65,13 +78,22 @@ public class KubernetesClientProperties {
     return this;
   }
 
-  public boolean isTrustSelfSignedCertificates() {
-    return trustSelfSignedCertificates;
+  @Override
+  public boolean equals(Object object) {
+    if (!(object instanceof KubernetesClientProperties that))
+      return false;
+    return isOpenshift() == that.isOpenshift()
+        && isTrustSelfSignedCertificates() == that.isTrustSelfSignedCertificates()
+        && Objects.equals(getContext(), that.getContext())
+        && Objects.equals(getUsername(), that.getUsername())
+        && Objects.equals(getPassword(), that.getPassword())
+        && Objects.equals(getOauthToken(), that.getOauthToken())
+        && Objects.equals(getMasterUrl(), that.getMasterUrl());
   }
 
-  public KubernetesClientProperties setTrustSelfSignedCertificates(
-      boolean trustSelfSignedCertificates) {
-    this.trustSelfSignedCertificates = trustSelfSignedCertificates;
-    return this;
+  @Override
+  public int hashCode() {
+    return Objects.hash(isOpenshift(), getContext(), getUsername(), getPassword(), getOauthToken(),
+        getMasterUrl(), isTrustSelfSignedCertificates());
   }
 }

@@ -12,9 +12,8 @@ import io.javaoperatorsdk.operator.Operator;
 @Component
 public class OperatorHealthIndicator extends AbstractHealthIndicator {
 
-  private final Operator operator;
-
   private final static Logger log = LoggerFactory.getLogger(OperatorHealthIndicator.class);
+  private final Operator operator;
 
   public OperatorHealthIndicator(final Operator operator) {
     super("OperatorSDK health check failed");

@@ -11,6 +11,7 @@ import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.lang.NonNull;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -22,6 +23,7 @@ import io.javaoperatorsdk.operator.api.config.ConfigurationServiceOverrider;
 import io.javaoperatorsdk.operator.api.config.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.processing.retry.GenericRetry;
+import io.javaoperatorsdk.operator.springboot.starter.properties.OperatorConfigurationProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.atIndex;
@@ -50,19 +52,16 @@ public class AutoConfigurationTest {
   @Autowired
   private List<Reconciler<?>> reconcilers;
 
-  @Autowired
-  private Consumer<ConfigurationServiceOverrider> compositeConfigurationServiceOverrider;
-
   @MockitoBean
   private Cloner cloner;
 
   @Test
   public void loadsKubernetesClientPropertiesProperly() {
     final var operatorProperties = config.getClient();
-    assertEquals("user", operatorProperties.getUsername().get());
-    assertEquals("password", operatorProperties.getPassword().get());
-    assertEquals("token", operatorProperties.getOauthToken().get());
-    assertEquals("http://master.url", operatorProperties.getMasterUrl().get());
+    assertEquals("user", operatorProperties.getUsername().orElseThrow());
+    assertEquals("password", operatorProperties.getPassword().orElseThrow());
+    assertEquals("token", operatorProperties.getOauthToken().orElseThrow());
+    assertEquals("http://master.url", operatorProperties.getMasterUrl().orElseThrow());
   }
 
   @Test
@@ -78,13 +77,12 @@ public class AutoConfigurationTest {
   @Test
   public void beansCreated() {
     assertNotNull(kubernetesClient);
-    assertNotNull(compositeConfigurationServiceOverrider);
   }
 
   @Test
   public void reconcilersAreDiscovered() {
     assertEquals(1, reconcilers.size());
-    assertTrue(reconcilers.get(0) instanceof TestReconciler);
+    assertInstanceOf(TestReconciler.class, reconcilers.get(0));
   }
 
   @Test
@@ -120,7 +118,7 @@ public class AutoConfigurationTest {
     public BeanPostProcessor operatorPostProcessor() {
       return new BeanPostProcessor() {
         @Override
-        public Object postProcessAfterInitialization(Object bean, String beanName)
+        public Object postProcessAfterInitialization(@NonNull Object bean, @NonNull String beanName)
             throws BeansException {
           if (bean instanceof Operator operator) {
             doNothing().when(operator).start();

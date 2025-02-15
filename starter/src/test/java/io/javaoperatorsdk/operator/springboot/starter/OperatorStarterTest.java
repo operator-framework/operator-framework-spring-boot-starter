@@ -13,11 +13,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import io.javaoperatorsdk.operator.Operator;
 import io.javaoperatorsdk.operator.RegisteredController;
 
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class OperatorStarterTest {
@@ -25,7 +21,7 @@ public class OperatorStarterTest {
   @Mock
   private Operator operator;
   @Mock
-  private CRDApplier CRDApplier;
+  private io.javaoperatorsdk.operator.springboot.starter.crd.CRDApplier CRDApplier;
   @Mock
   private ApplicationReadyEvent event;
   @Mock

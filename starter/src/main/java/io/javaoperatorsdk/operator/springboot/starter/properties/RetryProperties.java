@@ -1,4 +1,7 @@
-package io.javaoperatorsdk.operator.springboot.starter;
+package io.javaoperatorsdk.operator.springboot.starter.properties;
+
+
+import java.util.Objects;
 
 public class RetryProperties {
 
@@ -43,4 +46,19 @@ public class RetryProperties {
     return this;
   }
 
+  @Override
+  public boolean equals(Object object) {
+    if (!(object instanceof RetryProperties that))
+      return false;
+    return Objects.equals(getMaxAttempts(), that.getMaxAttempts())
+        && Objects.equals(getInitialInterval(), that.getInitialInterval())
+        && Objects.equals(getIntervalMultiplier(), that.getIntervalMultiplier())
+        && Objects.equals(getMaxInterval(), that.getMaxInterval());
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getMaxAttempts(), getInitialInterval(), getIntervalMultiplier(),
+        getMaxInterval());
+  }
 }

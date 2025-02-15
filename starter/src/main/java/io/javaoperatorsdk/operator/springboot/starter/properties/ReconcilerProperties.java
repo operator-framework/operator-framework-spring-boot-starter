@@ -1,7 +1,10 @@
-package io.javaoperatorsdk.operator.springboot.starter;
+package io.javaoperatorsdk.operator.springboot.starter.properties;
+
 
 import java.time.Duration;
+import java.util.Objects;
 import java.util.Set;
+
 
 public class ReconcilerProperties {
   private String name;
@@ -29,7 +32,7 @@ public class ReconcilerProperties {
     this.finalizerName = finalizerName;
   }
 
-  public Boolean isGenerationAware() {
+  public Boolean getGenerationAware() {
     return generationAware;
   }
 
@@ -37,7 +40,7 @@ public class ReconcilerProperties {
     this.generationAware = generationAware;
   }
 
-  public Boolean isClusterScoped() {
+  public Boolean getClusterScoped() {
     return clusterScoped;
   }
 
@@ -75,5 +78,25 @@ public class ReconcilerProperties {
 
   public void setReconciliationMaxInterval(Duration reconciliationMaxInterval) {
     this.reconciliationMaxInterval = reconciliationMaxInterval;
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (!(object instanceof ReconcilerProperties that))
+      return false;
+    return Objects.equals(getName(), that.getName())
+        && Objects.equals(getFinalizerName(), that.getFinalizerName())
+        && Objects.equals(getGenerationAware(), that.getGenerationAware())
+        && Objects.equals(getClusterScoped(), that.getClusterScoped())
+        && Objects.equals(getNamespaces(), that.getNamespaces())
+        && Objects.equals(getRetry(), that.getRetry())
+        && Objects.equals(getLabelSelector(), that.getLabelSelector())
+        && Objects.equals(getReconciliationMaxInterval(), that.getReconciliationMaxInterval());
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(getName(), getFinalizerName(), getGenerationAware(), getClusterScoped(),
+        getNamespaces(), getRetry(), getLabelSelector(), getReconciliationMaxInterval());
   }
 }

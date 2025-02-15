@@ -1,18 +1,15 @@
 package io.javaoperatorsdk.operator.springboot.starter;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,14 +25,12 @@ import io.javaoperatorsdk.operator.Operator;
 import io.javaoperatorsdk.operator.ReconcilerUtils;
 import io.javaoperatorsdk.operator.api.config.Cloner;
 import io.javaoperatorsdk.operator.api.config.ConfigurationServiceOverrider;
-import io.javaoperatorsdk.operator.api.config.ControllerConfigurationOverrider;
 import io.javaoperatorsdk.operator.api.config.DefaultResourceClassResolver;
 import io.javaoperatorsdk.operator.api.config.ResourceClassResolver;
 import io.javaoperatorsdk.operator.api.monitoring.Metrics;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
-import io.javaoperatorsdk.operator.processing.retry.GenericRetry;
-import io.javaoperatorsdk.operator.springboot.starter.CRDApplier.CRDTransformer;
-import io.javaoperatorsdk.operator.springboot.starter.CRDApplier.DefaultCRDApplier;
+import io.javaoperatorsdk.operator.springboot.starter.crd.CRDApplier;
+import io.javaoperatorsdk.operator.springboot.starter.properties.OperatorConfigurationProperties;
 
 @Configuration
 @EnableConfigurationProperties(OperatorConfigurationProperties.class)
@@ -44,25 +39,23 @@ public class OperatorAutoConfiguration {
   private final static Logger log = LoggerFactory.getLogger(OperatorAutoConfiguration.class);
 
   @Autowired
-  private OperatorConfigurationProperties configuration;
+  private OperatorConfigurationProperties configurationProperties;
 
   @Bean
   @ConditionalOnMissingBean
-  public KubernetesClient kubernetesClient(Optional<HttpClient.Factory> httpClientFactory,
-      Config config) {
-    return configuration.getClient().isOpenshift()
-        ? httpClientFactory
-            .map(it -> new KubernetesClientBuilder().withHttpClientFactory(it).withConfig(config)
-                .build().adapt(OpenShiftClient.class))
-            // new DefaultOpenShiftClient(it.createHttpClient(config),
-            // new OpenShiftConfig(config)))
-            .orElseGet(() -> new KubernetesClientBuilder().withConfig(config)
-                .build().adapt(OpenShiftClient.class))
-        : httpClientFactory
-            .map(it -> new KubernetesClientBuilder().withHttpClientFactory(it).withConfig(config)
-                .build())
-            .orElseGet(() -> new KubernetesClientBuilder().withConfig(config)
-                .build());
+  public KubernetesClient kubernetesClient(
+      @Autowired(required = false) HttpClient.Factory httpClientFactory, Config config) {
+    KubernetesClientBuilder clientBuilder = new KubernetesClientBuilder().withConfig(config);
+
+    if (httpClientFactory != null) {
+      clientBuilder = clientBuilder.withHttpClientFactory(httpClientFactory);
+    }
+    KubernetesClient client = clientBuilder.build();
+
+    if (configurationProperties.getClient().isOpenshift()) {
+      return client.adapt(OpenShiftClient.class);
+    }
+    return client;
   }
 
   @Bean
@@ -72,106 +65,77 @@ public class OperatorAutoConfiguration {
   }
 
   @Bean
-  @ConditionalOnProperty(value = "javaoperatorsdk.crd.apply-on-startup", havingValue = "true")
-  public CRDApplier crdApplier(KubernetesClient client, List<CRDTransformer> transformers) {
-    var crd = configuration.getCrd();
-    return new DefaultCRDApplier(client, transformers, crd.getPath(), crd.getSuffix());
-  }
-
-  @Bean
   @ConditionalOnMissingBean(CRDApplier.class)
   public CRDApplier disabledCrdApplier() {
+    if (log.isDebugEnabled()) {
+      log.debug("no CRDApplier loaded, using NOOP");
+    }
     return CRDApplier.NOOP;
-  }
-
-  @Bean
-  public OperatorStarter operatorStarter(Operator operator, CRDApplier applier) {
-    return new OperatorStarter(operator, applier);
   }
 
   @Bean(destroyMethod = "stop")
   @ConditionalOnMissingBean(Operator.class)
-  public Operator operator(
-      BiConsumer<Operator, Reconciler<?>> reconcilerRegisterer,
-      @Qualifier("compositeConfigurationServiceOverrider") Consumer<ConfigurationServiceOverrider> compositeConfigurationServiceOverrider,
-      KubernetesClient kubernetesClient,
-      List<Reconciler<?>> reconcilers) {
-
-    var operator = new Operator(compositeConfigurationServiceOverrider);
-    reconcilers.forEach(reconciler -> reconcilerRegisterer.accept(operator, reconciler));
-
-    return operator;
-  }
-
-  @Bean
-  public BiConsumer<Operator, Reconciler<?>> reconcilerRegisterer() {
-    return (operator, reconciler) -> {
-      var name = ReconcilerUtils.getNameFor(reconciler);
-      var props = configuration.getReconcilers().get(name);
-
-      operator.register(reconciler, overrider -> overrideFromProps(overrider, props));
-    };
-  }
-
-  @Bean
-  public Consumer<ConfigurationServiceOverrider> compositeConfigurationServiceOverrider(
-      List<Consumer<ConfigurationServiceOverrider>> configServiceOverriders) {
-    return configServiceOverriders.stream()
+  public Operator operator(List<Consumer<ConfigurationServiceOverrider>> configServiceOverriders,
+      List<Reconciler<?>> reconcilers,
+      List<DependentResourceConfigurator> dependentResourceConfigurators) {
+    var chainedOverriders = configServiceOverriders.stream()
         .reduce(Consumer::andThen)
         .orElseThrow(
             () -> new IllegalStateException("Default Config Service Overrider Not Created"));
+
+    var dependentResourceConfiguratorsMap = dependentResourceConfigurators == null ? null
+        : dependentResourceConfigurators.stream()
+            .collect(Collectors.groupingBy(DependentResourceConfigurator::getName));
+
+    var operator = new Operator(chainedOverriders);
+    reconcilers.forEach(reconciler -> {
+      var name = ReconcilerUtils.getNameFor(reconciler);
+      var props = configurationProperties.getReconcilers().get(name);
+      operator.register(reconciler, o -> {
+        ReconcilerRegistrationUtil.overrideFromProps(o, props);
+        if (dependentResourceConfiguratorsMap != null) {
+          var drsForReconciler = ReconcilerRegistrationUtil.filterConfigurators(reconciler,
+              dependentResourceConfiguratorsMap);
+          drsForReconciler.forEach(dr -> o.replacingNamedDependentResourceConfig(dr.getName(), dr));
+        }
+      });
+    });
+    return operator;
   }
 
   @Bean
   @Order(0)
   public Consumer<ConfigurationServiceOverrider> defaultConfigServiceOverrider(
-      @Autowired(required = false) Cloner cloner,
-      Metrics metrics, KubernetesClient kubernetesClient) {
+      @Autowired(required = false) Cloner cloner, Metrics metrics,
+      KubernetesClient kubernetesClient) {
     return overrider -> {
-      doIfPresent(cloner, overrider::withResourceCloner);
-      doIfPresent(configuration.getStopOnInformerErrorDuringStartup(),
+      ReconcilerRegistrationUtil.doIfPresent(cloner, overrider::withResourceCloner);
+      ReconcilerRegistrationUtil.doIfPresent(
+          configurationProperties.getStopOnInformerErrorDuringStartup(),
           overrider::withStopOnInformerErrorDuringStartup);
-      doIfPresent(configuration.getConcurrentWorkflowExecutorThreads(),
+      ReconcilerRegistrationUtil.doIfPresent(
+          configurationProperties.getConcurrentWorkflowExecutorThreads(),
           overrider::withConcurrentWorkflowExecutorThreads);
-      doIfPresent(configuration.getCloseClientOnStop(), overrider::withCloseClientOnStop);
-      doIfPresent(configuration.getCacheSyncTimeout(), overrider::withCacheSyncTimeout);
+      ReconcilerRegistrationUtil.doIfPresent(configurationProperties.getCloseClientOnStop(),
+          overrider::withCloseClientOnStop);
+      ReconcilerRegistrationUtil.doIfPresent(configurationProperties.getCacheSyncTimeout(),
+          overrider::withCacheSyncTimeout);
+
       overrider
-          .withConcurrentReconciliationThreads(configuration.getConcurrentReconciliationThreads())
+          .withConcurrentReconciliationThreads(
+              configurationProperties.getConcurrentReconciliationThreads())
           .withMetrics(metrics)
-          .checkingCRDAndValidateLocalModel(configuration.getCheckCrdAndValidateLocalModel())
+          .checkingCRDAndValidateLocalModel(
+              configurationProperties.isCheckCrdAndValidateLocalModel())
           .withKubernetesClient(kubernetesClient);
     };
-  }
-
-  private void overrideFromProps(ControllerConfigurationOverrider<?> overrider,
-      ReconcilerProperties props) {
-    if (props != null) {
-      doIfPresent(props.getFinalizerName(), overrider::withFinalizer);
-      doIfPresent(props.getName(), overrider::withName);
-      doIfPresent(props.getNamespaces(), overrider::settingNamespaces);
-      doIfPresent(props.getRetry(), r -> {
-        var retry = new GenericRetry();
-        doIfPresent(r.getInitialInterval(), retry::setInitialInterval);
-        doIfPresent(r.getMaxAttempts(), retry::setMaxAttempts);
-        doIfPresent(r.getMaxInterval(), retry::setMaxInterval);
-        doIfPresent(r.getIntervalMultiplier(), retry::setIntervalMultiplier);
-        overrider.withRetry(retry);
-      });
-      doIfPresent(props.isGenerationAware(), overrider::withGenerationAware);
-      doIfPresent(props.isClusterScoped(), clusterScoped -> {
-        if (clusterScoped) {
-          overrider.watchingAllNamespaces();
-        }
-      });
-      doIfPresent(props.getLabelSelector(), overrider::withLabelSelector);
-      doIfPresent(props.getReconciliationMaxInterval(), overrider::withReconciliationMaxInterval);
-    }
   }
 
   @Bean
   @ConditionalOnMissingBean(name = "reconciliationExecutorService")
   public ExecutorService reconciliationExecutorService() {
-    return Executors.newFixedThreadPool(configuration.getConcurrentReconciliationThreads());
+    return Executors
+        .newFixedThreadPool(configurationProperties.getConcurrentReconciliationThreads());
   }
 
   @Bean
@@ -183,7 +147,7 @@ public class OperatorAutoConfiguration {
   @Bean
   public Config getClientConfiguration(
       @Autowired(required = false) KubernetesConfigCustomizer configCustomizer) {
-    return configuration.getClient().getContext()
+    return configurationProperties.getClient().getContext()
         .map(Config::autoConfigure)
         .map(it -> {
           if (configCustomizer != null) {
@@ -195,7 +159,7 @@ public class OperatorAutoConfiguration {
           }
         })
         .orElseGet(() -> {
-          final var clientCfg = configuration.getClient();
+          final var clientCfg = configurationProperties.getClient();
           ConfigBuilder config = new ConfigBuilder();
           config.withTrustCerts(clientCfg.isTrustSelfSignedCertificates());
           clientCfg.getMasterUrl().ifPresent(config::withMasterUrl);
@@ -208,10 +172,6 @@ public class OperatorAutoConfiguration {
 
           return config.build();
         });
-  }
-
-  private <T> void doIfPresent(T prop, Consumer<T> action) {
-    Optional.ofNullable(prop).ifPresent(action);
   }
 
 }

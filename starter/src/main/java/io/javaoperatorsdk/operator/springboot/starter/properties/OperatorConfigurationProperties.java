@@ -1,8 +1,9 @@
-package io.javaoperatorsdk.operator.springboot.starter;
+package io.javaoperatorsdk.operator.springboot.starter.properties;
 
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -11,8 +12,9 @@ import io.javaoperatorsdk.operator.api.config.ConfigurationService;
 @ConfigurationProperties(prefix = "javaoperatorsdk")
 public class OperatorConfigurationProperties {
 
-  private CrdProperties crd = new CrdProperties();
-  private KubernetesClientProperties client = new KubernetesClientProperties();
+  CrdProperties crd = new CrdProperties();
+  KubernetesClientProperties client = new KubernetesClientProperties();
+
   private Map<String, ReconcilerProperties> reconcilers = Collections.emptyMap();
   private boolean checkCrdAndValidateLocalModel = true;
   private int concurrentReconciliationThreads =
@@ -23,6 +25,14 @@ public class OperatorConfigurationProperties {
   private Boolean closeClientOnStop;
   private Boolean stopOnInformerErrorDuringStartup;
   private Duration cacheSyncTimeout;
+
+  public CrdProperties getCrd() {
+    return crd;
+  }
+
+  public void setCrd(CrdProperties crd) {
+    this.crd = crd;
+  }
 
   public KubernetesClientProperties getClient() {
     return client;
@@ -40,7 +50,7 @@ public class OperatorConfigurationProperties {
     this.reconcilers = reconcilers;
   }
 
-  public boolean getCheckCrdAndValidateLocalModel() {
+  public boolean isCheckCrdAndValidateLocalModel() {
     return checkCrdAndValidateLocalModel;
   }
 
@@ -105,48 +115,33 @@ public class OperatorConfigurationProperties {
     this.cacheSyncTimeout = cacheSyncTimeout;
   }
 
-  public CrdProperties getCrd() {
-    return crd;
+  @Override
+  public boolean equals(Object object) {
+    if (!(object instanceof OperatorConfigurationProperties that))
+      return false;
+    return isCheckCrdAndValidateLocalModel() == that.isCheckCrdAndValidateLocalModel()
+        && getConcurrentReconciliationThreads() == that.getConcurrentReconciliationThreads()
+        && Objects.equals(getCrd(), that.getCrd())
+        && Objects.equals(getClient(), that.getClient())
+        && Objects.equals(getReconcilers(), that.getReconcilers())
+        && Objects.equals(getMinConcurrentReconciliationThreads(),
+            that.getMinConcurrentReconciliationThreads())
+        && Objects.equals(getConcurrentWorkflowExecutorThreads(),
+            that.getConcurrentWorkflowExecutorThreads())
+        && Objects.equals(getMinConcurrentWorkflowExecutorThreads(),
+            that.getMinConcurrentWorkflowExecutorThreads())
+        && Objects.equals(getCloseClientOnStop(), that.getCloseClientOnStop())
+        && Objects.equals(getStopOnInformerErrorDuringStartup(),
+            that.getStopOnInformerErrorDuringStartup())
+        && Objects.equals(getCacheSyncTimeout(), that.getCacheSyncTimeout());
   }
 
-  public void setCrd(CrdProperties crd) {
-    this.crd = crd;
-  }
-
-  public static class CrdProperties {
-
-    private boolean applyOnStartup;
-    /**
-     * path to the resource folder where CRDs are located
-     */
-    private String path = "/META-INF/fabric8/";
-    /**
-     * file suffix to filter out CRDs
-     */
-    private String suffix = "-v1.yml";
-
-    public boolean isApplyOnStartup() {
-      return applyOnStartup;
-    }
-
-    public void setApplyOnStartup(boolean applyOnStartup) {
-      this.applyOnStartup = applyOnStartup;
-    }
-
-    public String getPath() {
-      return path;
-    }
-
-    public void setPath(String path) {
-      this.path = path;
-    }
-
-    public String getSuffix() {
-      return suffix;
-    }
-
-    public void setSuffix(String suffix) {
-      this.suffix = suffix;
-    }
+  @Override
+  public int hashCode() {
+    return Objects.hash(getCrd(), getClient(), getReconcilers(), isCheckCrdAndValidateLocalModel(),
+        getConcurrentReconciliationThreads(), getMinConcurrentReconciliationThreads(),
+        getConcurrentWorkflowExecutorThreads(),
+        getMinConcurrentWorkflowExecutorThreads(), getCloseClientOnStop(),
+        getStopOnInformerErrorDuringStartup(), getCacheSyncTimeout());
   }
 }
